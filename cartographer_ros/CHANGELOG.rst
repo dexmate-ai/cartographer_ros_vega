@@ -2,8 +2,8 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.9002 (2020-10-30)
+---------------------
 * Handle multiple ROS messages with the same timestamp (`#46 <https://github.com/ros2/cartographer_ros/issues/46>`_)
 * Contributors: Michel Hidalgo
 
