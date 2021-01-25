@@ -2,8 +2,8 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.9003 (2021-01-25)
+---------------------
 * Switch to using a C-style string for RCLCPP macros.
 * Cleanup the CMakeLists.txt.
 * Contributors: Chris Lalancette
