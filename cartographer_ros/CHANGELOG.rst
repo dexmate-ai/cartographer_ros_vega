@@ -2,8 +2,8 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.0.9004 (2021-10-28)
+---------------------
 * add pbstream_to_ros_map_node (`#54 <https://github.com/ros2/cartographer_ros/issues/54>`_)
 * Use the non-deprecated tf2_eigen.hpp header. (`#55 <https://github.com/ros2/cartographer_ros/issues/55>`_)
 * Contributors: Chris Lalancette, Liangqian
