@@ -121,7 +121,7 @@ void CheckOdometryMessage(nav_msgs::msg::Odometry::ConstSharedPtr message) {
                           << " pose.position.x: " << pose.position.x
                           << " pose.position.y: " << pose.position.y
                           << " pose.position.z: " << pose.position.z
-                          << " pose.orientation Yaw: " << tf2::getYaw(pose.orientation)
+                          //<< " pose.orientation Yaw: " << tf2::getYaw(pose.orientation)
                              ;
   }
 }
