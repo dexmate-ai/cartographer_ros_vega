@@ -2,8 +2,8 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.0.9001 (2023-04-13)
+---------------------
 * fix cmake to prevent multiple definitions (`#63 <https://github.com/ros2/cartographer_ros/issues/63>`_)
 * Contributors: Wolf Vollprecht
 
