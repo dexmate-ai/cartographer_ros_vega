@@ -2,8 +2,8 @@
 Changelog for package cartographer_rviz
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.0.9002 (2024-03-15)
+---------------------
 * Fix a warning when building against newer Ogre.
 * Fix warnings when building against recent ROS 2 releases.
 * Contributors: Chris Lalancette
