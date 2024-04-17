@@ -2,8 +2,8 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.0.9003 (2024-04-17)
+---------------------
 * Fix build on Rolling. (`#74 <https://github.com/ros2/cartographer_ros/issues/74>`_)
 * Contributors: Chris Lalancette
 
