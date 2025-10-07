@@ -2,6 +2,9 @@
 Changelog for package cartographer_ros_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 1.0.9003 (2021-01-25)
 ---------------------
 

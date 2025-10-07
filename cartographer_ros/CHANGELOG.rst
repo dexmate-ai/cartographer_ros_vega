@@ -2,6 +2,12 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* add pbstream_to_ros_map_node (`#54 <https://github.com/ros2/cartographer_ros/issues/54>`_)
+* Use the non-deprecated tf2_eigen.hpp header. (`#55 <https://github.com/ros2/cartographer_ros/issues/55>`_)
+* Contributors: Chris Lalancette, Liangqian
+
 1.0.9003 (2021-01-25)
 ---------------------
 * Switch to using a C-style string for RCLCPP macros.
