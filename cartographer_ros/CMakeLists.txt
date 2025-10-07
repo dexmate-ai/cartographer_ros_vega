@@ -50,6 +50,15 @@ find_package(urdf REQUIRED)
 find_package(urdfdom_headers REQUIRED)
 find_package(visualization_msgs REQUIRED)
 
+# glog is not linked, however we look for it to detect the glog version
+# and use a different code path if glog >= 0.7.0 is detected
+find_package(glog CONFIG QUIET)
+if(DEFINED glog_VERSION)
+  if(NOT glog_VERSION VERSION_LESS 0.7.0)
+    add_definitions(-DROS_CARTOGRAPHER_GLOG_GE_070)
+  endif()
+endif()
+
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}

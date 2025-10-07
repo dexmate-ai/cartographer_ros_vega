@@ -33,6 +33,13 @@ const char* GetBasename(const char* filepath) {
   return base ? (base + 1) : filepath;
 }
 
+#if defined(ROS_CARTOGRAPHER_GLOG_GE_070)
+std::chrono::system_clock::time_point ConvertTmToTimePoint(const std::tm& tm) {
+    std::time_t timeT = std::mktime(const_cast<std::tm*>(&tm)); // Convert std::tm to time_t
+    return std::chrono::system_clock::from_time_t(timeT);      // Convert time_t to time_point
+}
+#endif
+
 }  // namespace
 
 ScopedRosLogSink::ScopedRosLogSink() : will_die_(false) { AddLogSink(this); }
@@ -46,10 +53,13 @@ void ScopedRosLogSink::send(const ::google::LogSeverity severity,
                             const size_t message_len) {
   (void) base_filename; // TODO: remove unused arg ?
 
+#if defined(ROS_CARTOGRAPHER_GLOG_GE_070)
+  const std::string message_string = ::google::LogSink::ToString(
+      severity, GetBasename(filename), line, ::google::LogMessageTime(ConvertTmToTimePoint(*tm_time)), message, message_len);
   // Google glog broke the ToString API, but has no way to tell what version it is using.
   // To support both newer and older glog versions, use a nasty hack were we infer the
   // version based on whether GOOGLE_GLOG_DLL_DECL is defined
-#if defined(GOOGLE_GLOG_DLL_DECL)
+#elif defined(GOOGLE_GLOG_DLL_DECL)
   const std::string message_string = ::google::LogSink::ToString(
       severity, GetBasename(filename), line, tm_time, message, message_len);
 #else
