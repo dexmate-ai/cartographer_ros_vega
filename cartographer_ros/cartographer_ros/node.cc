@@ -17,6 +17,7 @@
 #include "cartographer_ros/node.h"
 
 #include <chrono>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -67,10 +68,16 @@ template <typename MessageType>
                           const typename MessageType::ConstSharedPtr),
     const int trajectory_id, const std::string& topic,
     ::rclcpp::Node::SharedPtr node_handle, Cartographer* const node) {
+  auto last_message_time = std::make_shared<rclcpp::Time>(
+      std::numeric_limits<int64_t>::min(), RCL_ROS_TIME);
   return node_handle->create_subscription<MessageType>(
       topic, rclcpp::SensorDataQoS(),
-      [node, handler, trajectory_id, topic](const typename MessageType::ConstSharedPtr msg) {
-          (node->*handler)(trajectory_id, topic, msg);
+      [node, handler, trajectory_id, topic, last_message_time](const typename MessageType::ConstSharedPtr msg) {
+        rclcpp::Time current_message_time = msg->header.stamp;
+        if (current_message_time > *last_message_time) {
+            (node->*handler)(trajectory_id, topic, msg);
+        }
+        *last_message_time = current_message_time;
       });
 }
 
