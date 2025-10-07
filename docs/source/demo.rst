@@ -12,20 +12,68 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-=====================
-Cartographer ROS Demo
-=====================
+=====
+Demos
+=====
 
-First, follow the installation instructions in the :ref:`getting-started` section.
-
-Now that Cartographer and Cartographer's ROS integration are installed,
-download the example bag, a 2D backpack collection of the `Deutsches Museum
-<https://en.wikipedia.org/wiki/Deutsches_Museum>`_, to a known location, in
-this case ``~/Downloads``, and use ``roslaunch`` to bring up the demo:
+Pure localization
+=================
 
   .. code-block:: bash
 
-    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/backpack_2d/cartographer_paper_deutsches_museum.bag
-    roslaunch cartographer_ros demo_2d.launch bag_filename:=${HOME}/Downloads/cartographer_paper_deutsches_museum.bag
+    # Pure localization demo in 2D: We use 2 different 2D bags from the Deutsche
+    # Museum. The first one is used to generate the map, the second to run
+    # pure localization.
+    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/backpack_2d/b2-2016-04-05-14-44-52.bag
+    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/backpack_2d/b2-2016-04-27-12-31-41.bag
+    # Generate the map: Run the next command, wait until cartographer_offline_node finishes.
+    roslaunch cartographer_ros offline_backpack_2d.launch bag_filenames:=${HOME}/Downloads/b2-2016-04-05-14-44-52.bag
+    # Run pure localization:
+    roslaunch cartographer_ros demo_backpack_2d_localization.launch \
+       map_filename:=${HOME}/Downloads/b2-2016-04-05-14-44-52.bag.pbstream \
+       bag_filename:=${HOME}/Downloads/b2-2016-04-27-12-31-41.bag
 
-The launch file will bring up ``roscore`` and ``rviz`` automatically.
+    # Pure localization demo in 3D: We use 2 different 3D bags from the Deutsche
+    # Museum. The first one is used to generate the map, the second to run
+    # pure localization.
+    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/backpack_3d/b3-2016-04-05-13-54-42.bag
+    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/backpack_3d/b3-2016-04-05-15-52-20.bag
+    # Generate the map: Run the next command, wait until cartographer_offline_node finishes.
+    roslaunch cartographer_ros offline_backpack_3d.launch bag_filenames:=${HOME}/Downloads/b3-2016-04-05-13-54-42.bag
+    # Run pure localization:
+    roslaunch cartographer_ros demo_backpack_3d_localization.launch \
+       map_filename:=${HOME}/Downloads/b3-2016-04-05-13-54-42.bag.pbstream \
+       bag_filename:=${HOME}/Downloads/b3-2016-04-05-15-52-20.bag
+
+Revo LDS
+========
+
+  .. code-block:: bash
+
+    # Download the Revo LDS example bag.
+    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/revo_lds/cartographer_paper_revo_lds.bag
+
+    # Launch the Revo LDS demo.
+    roslaunch cartographer_ros demo_revo_lds.launch bag_filename:=${HOME}/Downloads/cartographer_paper_revo_lds.bag
+
+PR2
+===
+
+  .. code-block:: bash
+
+    # Download the PR2 example bag.
+    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/pr2/2011-09-15-08-32-46.bag
+
+    # Launch the PR2 demo.
+    roslaunch cartographer_ros demo_pr2.launch bag_filename:=${HOME}/Downloads/2011-09-15-08-32-46.bag
+
+Taurob Tracker
+==============
+
+  .. code-block:: bash
+
+    # Download the Taurob Tracker example bag.
+    wget -P ~/Downloads https://storage.googleapis.com/cartographer-public-data/bags/taurob_tracker/taurob_tracker_simulation.bag
+
+    # Launch the Taurob Tracker demo.
+    roslaunch cartographer_ros demo_taurob_tracker.launch bag_filename:=${HOME}/Downloads/taurob_tracker_simulation.bag
