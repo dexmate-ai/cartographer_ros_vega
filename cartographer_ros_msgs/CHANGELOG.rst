@@ -2,6 +2,9 @@
 Changelog for package cartographer_ros_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 2.0.9002 (2024-03-15)
 ---------------------
 

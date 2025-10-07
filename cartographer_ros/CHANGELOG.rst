@@ -2,6 +2,11 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix build on Rolling. (`#74 <https://github.com/ros2/cartographer_ros/issues/74>`_)
+* Contributors: Chris Lalancette
+
 2.0.9002 (2024-03-15)
 ---------------------
 * Fix for newer Google logging.
