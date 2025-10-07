@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
+#include "absl/memory/memory.h"
 #include "cartographer/mapping/map_builder.h"
 #include "cartographer_ros/node.h"
 #include "cartographer_ros/node_options.h"
 #include "cartographer_ros/ros_log_sink.h"
 #include "gflags/gflags.h"
+#include "tf2_ros/transform_listener.h"
 
-#include <rclcpp/rclcpp.hpp>
-
+DEFINE_bool(collect_metrics, false,
+            "Activates the collection of runtime metrics. If activated, the "
+            "metrics can be accessed via a ROS service.");
 DEFINE_string(configuration_directory, "",
               "First directory in which configuration files are searched, "
               "second is always the Cartographer installation to allow "
@@ -41,37 +44,38 @@ DEFINE_string(
     save_state_filename, "",
     "If non-empty, serialize state and write it to disk before shutting down.");
 
-
 namespace cartographer_ros {
 namespace {
 
 void Run() {
+  constexpr double kTfBufferCacheTimeInSeconds = 10.;
+  tf2_ros::Buffer tf_buffer{::ros::Duration(kTfBufferCacheTimeInSeconds)};
+  tf2_ros::TransformListener tf(tf_buffer);
   NodeOptions node_options;
   TrajectoryOptions trajectory_options;
   std::tie(node_options, trajectory_options) =
       LoadOptions(FLAGS_configuration_directory, FLAGS_configuration_basename);
 
-  auto map_builder =
-      cartographer::common::make_unique<cartographer::mapping::MapBuilder>(
-          node_options.map_builder_options);
-
-  auto node = std::make_shared<cartographer_ros::Cartographer>(node_options, std::move(map_builder));
-
+  auto map_builder = absl::make_unique<cartographer::mapping::MapBuilder>(
+      node_options.map_builder_options);
+  Node node(node_options, std::move(map_builder), &tf_buffer,
+            FLAGS_collect_metrics);
   if (!FLAGS_load_state_filename.empty()) {
-    node->LoadState(FLAGS_load_state_filename, FLAGS_load_frozen_state);
+    node.LoadState(FLAGS_load_state_filename, FLAGS_load_frozen_state);
   }
 
   if (FLAGS_start_trajectory_with_default_topics) {
-    node->StartTrajectoryWithDefaultTopics(trajectory_options);
+    node.StartTrajectoryWithDefaultTopics(trajectory_options);
   }
 
-  rclcpp::spin(node);
+  ::ros::spin();
 
-  node->FinishAllTrajectories();
-  node->RunFinalOptimization();
+  node.FinishAllTrajectories();
+  node.RunFinalOptimization();
 
   if (!FLAGS_save_state_filename.empty()) {
-    node->SerializeState(FLAGS_save_state_filename);
+    node.SerializeState(FLAGS_save_state_filename,
+                        true /* include_unfinished_submaps */);
   }
 }
 
@@ -79,21 +83,18 @@ void Run() {
 }  // namespace cartographer_ros
 
 int main(int argc, char** argv) {
-  // Init rclcpp first because gflags reorders command line flags in argv
-  ::rclcpp::init(argc, argv);
-
-  // Keep going if an unknown flag is encountered
-  // https://github.com/gflags/gflags/issues/148#issuecomment-318826625
-  google::AllowCommandLineReparsing();
   google::InitGoogleLogging(argv[0]);
-  google::ParseCommandLineFlags(&argc, &argv, false);
+  google::ParseCommandLineFlags(&argc, &argv, true);
 
   CHECK(!FLAGS_configuration_directory.empty())
       << "-configuration_directory is missing.";
   CHECK(!FLAGS_configuration_basename.empty())
       << "-configuration_basename is missing.";
 
+  ::ros::init(argc, argv, "cartographer_node");
+  ::ros::start();
+
   cartographer_ros::ScopedRosLogSink ros_log_sink;
   cartographer_ros::Run();
-  ::rclcpp::shutdown();
+  ::ros::shutdown();
 }

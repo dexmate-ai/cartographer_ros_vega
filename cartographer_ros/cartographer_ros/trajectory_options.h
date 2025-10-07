@@ -22,9 +22,7 @@
 #include "cartographer/common/lua_parameter_dictionary.h"
 #include "cartographer/common/port.h"
 #include "cartographer/mapping/proto/trajectory_builder_options.pb.h"
-#include <cartographer_ros_msgs/msg/trajectory_options.hpp>
-
-#include <rclcpp/time.hpp>
+#include "cartographer_ros_msgs/TrajectoryOptions.h"
 
 namespace cartographer_ros {
 
@@ -52,23 +50,21 @@ struct TrajectoryOptions {
 
 ::cartographer::mapping::proto::InitialTrajectoryPose
 CreateInitialTrajectoryPose(
-    ::cartographer::common::LuaParameterDictionary* lua_parameter_dictionary,
-    ::rclcpp::Time node_time);
+    ::cartographer::common::LuaParameterDictionary* lua_parameter_dictionary);
 
 TrajectoryOptions CreateTrajectoryOptions(
     ::cartographer::common::LuaParameterDictionary* lua_parameter_dictionary);
 
 TrajectoryOptions CreateTrajectoryOptions(
     ::cartographer::common::LuaParameterDictionary* lua_parameter_dictionary,
-    ::cartographer::common::LuaParameterDictionary* initial_trajectory_pose,
-    ::rclcpp::Time node_time);
+    ::cartographer::common::LuaParameterDictionary* initial_trajectory_pose);
 
 // Try to convert 'msg' into 'options'. Returns false on failure.
-bool FromRosMessage(const cartographer_ros_msgs::msg::TrajectoryOptions& msg,
+bool FromRosMessage(const cartographer_ros_msgs::TrajectoryOptions& msg,
                     TrajectoryOptions* options);
 
 // Converts 'trajectory_options' into a ROS message.
-cartographer_ros_msgs::msg::TrajectoryOptions ToRosMessage(
+cartographer_ros_msgs::TrajectoryOptions ToRosMessage(
     const TrajectoryOptions& trajectory_options);
 
 }  // namespace cartographer_ros

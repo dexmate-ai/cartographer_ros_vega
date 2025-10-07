@@ -22,8 +22,6 @@
 #include "cartographer_ros/time_conversion.h"
 #include "glog/logging.h"
 
-#include "rclcpp/clock.hpp"
-
 namespace cartographer_ros {
 
 namespace {
@@ -84,18 +82,16 @@ TrajectoryOptions CreateTrajectoryOptions(
 
 TrajectoryOptions CreateTrajectoryOptions(
     ::cartographer::common::LuaParameterDictionary* lua_parameter_dictionary,
-    ::cartographer::common::LuaParameterDictionary* initial_trajectory_pose,
-    ::rclcpp::Time node_time) {
+    ::cartographer::common::LuaParameterDictionary* initial_trajectory_pose) {
   TrajectoryOptions options = CreateTrajectoryOptions(lua_parameter_dictionary);
   *options.trajectory_builder_options.mutable_initial_trajectory_pose() =
-      CreateInitialTrajectoryPose(initial_trajectory_pose, node_time);
+      CreateInitialTrajectoryPose(initial_trajectory_pose);
   return options;
 }
 
 ::cartographer::mapping::proto::InitialTrajectoryPose
 CreateInitialTrajectoryPose(
-    ::cartographer::common::LuaParameterDictionary* lua_parameter_dictionary,
-    ::rclcpp::Time node_time) {
+    ::cartographer::common::LuaParameterDictionary* lua_parameter_dictionary) {
   ::cartographer::mapping::proto::InitialTrajectoryPose pose;
   pose.set_to_trajectory_id(
       lua_parameter_dictionary->GetNonNegativeInt("to_trajectory_id"));
@@ -105,11 +101,11 @@ CreateInitialTrajectoryPose(
   pose.set_timestamp(
       lua_parameter_dictionary->HasKey("timestamp")
           ? lua_parameter_dictionary->GetNonNegativeInt("timestamp")
-          : cartographer::common::ToUniversal(FromRos(node_time)));
+          : cartographer::common::ToUniversal(FromRos(ros::Time::now())));
   return pose;
 }
 
-bool FromRosMessage(const cartographer_ros_msgs::msg::TrajectoryOptions& msg,
+bool FromRosMessage(const cartographer_ros_msgs::TrajectoryOptions& msg,
                     TrajectoryOptions* options) {
   options->tracking_frame = msg.tracking_frame;
   options->published_frame = msg.published_frame;
@@ -139,9 +135,9 @@ bool FromRosMessage(const cartographer_ros_msgs::msg::TrajectoryOptions& msg,
   return true;
 }
 
-cartographer_ros_msgs::msg::TrajectoryOptions ToRosMessage(
+cartographer_ros_msgs::TrajectoryOptions ToRosMessage(
     const TrajectoryOptions& options) {
-  cartographer_ros_msgs::msg::TrajectoryOptions msg;
+  cartographer_ros_msgs::TrajectoryOptions msg;
   msg.tracking_frame = options.tracking_frame;
   msg.published_frame = options.published_frame;
   msg.odom_frame = options.odom_frame;
