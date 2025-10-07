@@ -19,14 +19,17 @@
 
 #include <OgreManualObject.h>
 #include <OgreMaterial.h>
+#include <OgreQuaternion.h>
 #include <OgreSceneManager.h>
 #include <OgreSceneNode.h>
 #include <OgreTexture.h>
+#include <OgreVector3.h>
 #include <cartographer/common/mutex.h>
 #include <cartographer_ros_msgs/SubmapEntry.h>
 #include <cartographer_ros_msgs/SubmapQuery.h>
 #include <ros/ros.h>
 #include <rviz/display_context.h>
+#include <rviz/frame_manager.h>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
@@ -41,29 +44,26 @@ class DrawableSubmap : public QObject {
   Q_OBJECT
 
  public:
-  // Each submap is identified by a 'trajectory_id' plus a 'submap_id'. The
-  // 'frame_manager' is needed to transform the scene node before rendering
-  // onto the offscreen texture. 'scene_manager' is the Ogre scene manager which
-  // contains all submaps.
+  // Each submap is identified by a 'trajectory_id' plus a 'submap_id'.
+  // 'scene_manager' is the Ogre scene manager to which to add a node.
   DrawableSubmap(int submap_id, int trajectory_id,
-                 ::rviz::FrameManager* frame_manager,
                  Ogre::SceneManager* scene_manager);
   ~DrawableSubmap() override;
   DrawableSubmap(const DrawableSubmap&) = delete;
   DrawableSubmap& operator=(const DrawableSubmap&) = delete;
 
-  // 'submap_entry' contains metadata which is used to find out whether this
-  // 'DrawableSubmap' should update itself. If an update is needed, it will send
-  // an RPC using 'client' to request the new data for the submap.
-  bool Update(const ::cartographer_ros_msgs::SubmapEntry& submap_entry,
-              ros::ServiceClient* client);
+  // Updates the 'metadata' for this submap. If necessary, the next call to
+  // MaybeFetchTexture() will fetch a new submap texture.
+  void Update(const ::std_msgs::Header& header,
+              const ::cartographer_ros_msgs::SubmapEntry& metadata,
+              ::rviz::FrameManager* frame_manager);
+
+  // If an update is needed, it will send an RPC using 'client' to request the
+  // new data for the submap and returns true.
+  bool MaybeFetchTexture(ros::ServiceClient* client);
 
   // Returns whether an RPC is in progress.
   bool QueryInProgress();
-
-  // Transforms the scene node for this submap before being rendered onto a
-  // texture.
-  void Transform(const ros::Time& ros_time);
 
   // Sets the alpha of the submap taking into account its slice height and the
   // 'current_tracking_z'.
@@ -75,41 +75,32 @@ class DrawableSubmap : public QObject {
 
  private Q_SLOTS:
   // Callback when an rpc request succeeded.
-  void OnRequestSuccess();
+  void UpdateSceneNode();
 
  private:
-  void QuerySubmap(int submap_id, int trajectory_id,
-                   ros::ServiceClient* client);
-  void OnRequestFailure();
-  void UpdateSceneNode();
+  void UpdateTransform();
   float UpdateAlpha(float target_alpha);
 
   const int submap_id_;
   const int trajectory_id_;
 
   ::cartographer::common::Mutex mutex_;
-  ::rviz::FrameManager* frame_manager_;
   Ogre::SceneManager* const scene_manager_;
   Ogre::SceneNode* const scene_node_;
   Ogre::ManualObject* manual_object_;
   Ogre::TexturePtr texture_;
   Ogre::MaterialPtr material_;
-  Eigen::Affine3d submap_pose_ GUARDED_BY(mutex_);
-  geometry_msgs::Pose transformed_pose_ GUARDED_BY(mutex_);
+  double submap_z_ = 0. GUARDED_BY(mutex_);
+  Ogre::Vector3 position_ GUARDED_BY(mutex_);
+  Ogre::Quaternion orientation_ GUARDED_BY(mutex_);
+  Eigen::Affine3d slice_pose_ GUARDED_BY(mutex_);
   std::chrono::milliseconds last_query_timestamp_ GUARDED_BY(mutex_);
-  bool query_in_progress_ GUARDED_BY(mutex_);
-  float resolution_ GUARDED_BY(mutex_);
-  int width_ GUARDED_BY(mutex_);
-  int height_ GUARDED_BY(mutex_);
-  int version_ GUARDED_BY(mutex_);
-  double slice_height_ GUARDED_BY(mutex_);
-  double last_query_slice_height_ GUARDED_BY(mutex_);
+  bool query_in_progress_ = false GUARDED_BY(mutex_);
+  int metadata_version_ = -1 GUARDED_BY(mutex_);
+  int texture_version_ = -1 GUARDED_BY(mutex_);
   std::future<void> rpc_request_future_;
-  std::string cells_ GUARDED_BY(mutex_);
-  std::unique_ptr<::cartographer_ros_msgs::SubmapQuery::Response> response_
-      GUARDED_BY(mutex_);
-  int texture_count_;
-  float current_alpha_;
+  ::cartographer_ros_msgs::SubmapQuery::Response response_ GUARDED_BY(mutex_);
+  float current_alpha_ = 0.f;
 };
 
 }  // namespace rviz

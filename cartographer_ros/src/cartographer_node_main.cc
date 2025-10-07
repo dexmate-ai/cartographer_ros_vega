@@ -48,6 +48,7 @@
 #include "cartographer_ros_msgs/TrajectorySubmapList.h"
 #include "geometry_msgs/Transform.h"
 #include "geometry_msgs/TransformStamped.h"
+#include "gflags/gflags.h"
 #include "glog/log_severity.h"
 #include "glog/logging.h"
 #include "pcl/point_cloud.h"
@@ -67,6 +68,14 @@
 #include "node_constants.h"
 #include "time_conversion.h"
 
+DEFINE_string(configuration_directory, "",
+              "First directory in which configuration files are searched, "
+              "second is always the Cartographer installation to allow "
+              "including files from there.");
+DEFINE_string(configuration_basename, "",
+              "Basename, i.e. not containing any directory prefix, of the "
+              "configuration file.");
+
 namespace cartographer_ros {
 namespace {
 
@@ -78,7 +87,13 @@ constexpr int64 kTrajectoryId = 0;
 constexpr int kSubscriberQueueSize = 150;
 constexpr int kSubmapPublishPeriodInUts = 300 * 10000ll;  // 300 milliseconds
 constexpr int kPosePublishPeriodInUts = 5 * 10000ll;      // 5 milliseconds
-constexpr double kMaxTransformDelaySeconds = 1.;
+constexpr double kMaxTransformDelaySeconds = 0.01;
+
+// Unique default topic names. Expected to be remapped as needed.
+constexpr char kLaserScanTopic[] = "/scan";
+constexpr char kMultiEchoLaserScanTopic[] = "/echoes";
+constexpr char kPointCloud2Topic[] = "/points2";
+constexpr char kImuTopic[] = "/imu";
 
 Rigid3d ToRigid3d(const geometry_msgs::TransformStamped& transform) {
   return Rigid3d(Eigen::Vector3d(transform.transform.translation.x,
@@ -153,7 +168,7 @@ class Node {
                         std::unique_ptr<SensorData> sensor_data);
   void ImuMessageCallback(const sensor_msgs::Imu::ConstPtr& msg);
   void LaserScanMessageCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
-  void MultiEchoLaserScanCallback(
+  void MultiEchoLaserScanMessageCallback(
       const sensor_msgs::MultiEchoLaserScan::ConstPtr& msg);
   void PointCloud2MessageCallback(
       const string& topic, const sensor_msgs::PointCloud2::ConstPtr& msg);
@@ -162,9 +177,6 @@ class Node {
                              const proto::LaserScan& laser_scan);
   void AddLaserFan3D(int64 timestamp, const string& frame_id,
                      const proto::LaserFan3D& laser_fan_3d);
-
-  template <typename T>
-  const T GetParamOrDie(const string& name);
 
   // Returns a transform for 'frame_id' to 'tracking_frame_' if it exists at
   // 'time' or throws tf2::TransformException if it does not exist.
@@ -183,15 +195,15 @@ class Node {
   ::cartographer::mapping::SensorCollator<SensorData> sensor_collator_;
   ros::NodeHandle node_handle_;
   ros::Subscriber imu_subscriber_;
-  ros::Subscriber laser_2d_subscriber_;
-  std::vector<ros::Subscriber> laser_3d_subscribers_;
+  ros::Subscriber laser_subscriber_2d_;
+  std::vector<ros::Subscriber> laser_subscribers_3d_;
   string tracking_frame_;
   string odom_frame_;
   string map_frame_;
   bool provide_odom_;
-  double laser_min_range_m_;
-  double laser_max_range_m_;
-  double laser_missing_echo_ray_length_m_;
+  double laser_min_range_;
+  double laser_max_range_;
+  double laser_missing_echo_ray_length_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_;
@@ -231,7 +243,7 @@ void Node::ImuMessageCallback(const sensor_msgs::Imu::ConstPtr& msg) {
   sensor_collator_.AddSensorData(
       kTrajectoryId,
       ::cartographer::common::ToUniversal(FromRos(msg->header.stamp)),
-      imu_subscriber_.getTopic(), std::move(sensor_data));
+      kImuTopic, std::move(sensor_data));
 }
 
 void Node::AddImu(const int64 timestamp, const string& frame_id,
@@ -242,10 +254,9 @@ void Node::AddImu(const int64 timestamp, const string& frame_id,
     const Rigid3d sensor_to_tracking =
         LookupToTrackingTransformOrThrow(time, frame_id);
     CHECK(sensor_to_tracking.translation().norm() < 1e-5)
-        << "The IMU is not colocated with the tracking frame. This makes it "
-           "hard "
-           "and inprecise to transform its linear accelaration into the "
-           "tracking_frame and will decrease the quality of the SLAM.";
+        << "The IMU frame must be colocated with the tracking frame. "
+           "Transforming linear accelaration into the tracking frame will "
+           "otherwise be imprecise.";
     trajectory_builder_->AddImuData(
         time, sensor_to_tracking.rotation() *
                   ::cartographer::transform::ToEigen(imu.linear_acceleration()),
@@ -264,7 +275,7 @@ void Node::LaserScanMessageCallback(
   sensor_collator_.AddSensorData(
       kTrajectoryId,
       ::cartographer::common::ToUniversal(FromRos(msg->header.stamp)),
-      laser_2d_subscriber_.getTopic(), std::move(sensor_data));
+      kLaserScanTopic, std::move(sensor_data));
 }
 
 void Node::AddHorizontalLaserFan(const int64 timestamp, const string& frame_id,
@@ -274,11 +285,10 @@ void Node::AddHorizontalLaserFan(const int64 timestamp, const string& frame_id,
   try {
     const Rigid3d sensor_to_tracking =
         LookupToTrackingTransformOrThrow(time, frame_id);
-    // TODO(hrapp): Make things configurable? Through Lua? Through ROS params?
     const ::cartographer::sensor::LaserFan laser_fan =
-        ::cartographer::sensor::ToLaserFan(laser_scan, laser_min_range_m_,
-                                           laser_max_range_m_,
-                                           laser_missing_echo_ray_length_m_);
+        ::cartographer::sensor::ToLaserFan(laser_scan, laser_min_range_,
+                                           laser_max_range_,
+                                           laser_missing_echo_ray_length_);
 
     const auto laser_fan_3d = ::cartographer::sensor::TransformLaserFan3D(
         ::cartographer::sensor::ToLaserFan3D(laser_fan),
@@ -290,14 +300,14 @@ void Node::AddHorizontalLaserFan(const int64 timestamp, const string& frame_id,
   }
 }
 
-void Node::MultiEchoLaserScanCallback(
+void Node::MultiEchoLaserScanMessageCallback(
     const sensor_msgs::MultiEchoLaserScan::ConstPtr& msg) {
   auto sensor_data = ::cartographer::common::make_unique<SensorData>(
       msg->header.frame_id, ToCartographer(*msg));
   sensor_collator_.AddSensorData(
       kTrajectoryId,
       ::cartographer::common::ToUniversal(FromRos(msg->header.stamp)),
-      laser_2d_subscriber_.getTopic(), std::move(sensor_data));
+      kMultiEchoLaserScanTopic, std::move(sensor_data));
 }
 
 void Node::PointCloud2MessageCallback(
@@ -330,85 +340,83 @@ void Node::AddLaserFan3D(const int64 timestamp, const string& frame_id,
   }
 }
 
-template <typename T>
-const T Node::GetParamOrDie(const string& name) {
-  CHECK(node_handle_.hasParam(name)) << "Required parameter '" << name
-                                     << "' is unset.";
-  T value;
-  node_handle_.getParam(name, value);
-  return value;
-}
-
 void Node::Initialize() {
-  tracking_frame_ = GetParamOrDie<string>("tracking_frame");
-  odom_frame_ = GetParamOrDie<string>("odom_frame");
-  map_frame_ = GetParamOrDie<string>("map_frame");
-  provide_odom_ = GetParamOrDie<bool>("provide_odom");
-  laser_min_range_m_ = GetParamOrDie<double>("laser_min_range_m");
-  laser_max_range_m_ = GetParamOrDie<double>("laser_max_range_m");
-  laser_missing_echo_ray_length_m_ =
-      GetParamOrDie<double>("laser_missing_echo_ray_length_m");
-
-  // Subscribe to the IMU.
-  const string imu_topic = GetParamOrDie<string>("imu_topic");
-  imu_subscriber_ = node_handle_.subscribe(imu_topic, kSubscriberQueueSize,
-                                           &Node::ImuMessageCallback, this);
-  std::unordered_set<string> expected_sensor_identifiers;
-  expected_sensor_identifiers.insert(imu_topic);
-
-  // Subscribe to exactly one laser.
-  const bool has_laser_scan_2d = node_handle_.hasParam("laser_scan_2d_topic");
-  const bool has_multi_echo_laser_scan_2d =
-      node_handle_.hasParam("multi_echo_laser_scan_2d_topic");
-  const bool has_laser_scan_3d = node_handle_.hasParam("laser_scan_3d_topics");
-
-  CHECK(has_laser_scan_2d + has_multi_echo_laser_scan_2d + has_laser_scan_3d ==
-        1)
-      << "Parameters 'laser_scan_2d_topic', 'multi_echo_laser_scan_2d_topic' "
-         "and 'laser_scan_3d_topics' are mutually exclusive, but one is "
-         "required.";
-
-  if (has_laser_scan_2d) {
-    const string topic = GetParamOrDie<string>("laser_scan_2d_topic");
-    laser_2d_subscriber_ = node_handle_.subscribe(
-        topic, kSubscriberQueueSize, &Node::LaserScanMessageCallback, this);
-    expected_sensor_identifiers.insert(topic);
-  }
-  if (has_multi_echo_laser_scan_2d) {
-    const string topic =
-        GetParamOrDie<string>("multi_echo_laser_scan_2d_topic");
-    laser_2d_subscriber_ = node_handle_.subscribe(
-        topic, kSubscriberQueueSize, &Node::MultiEchoLaserScanCallback, this);
-    expected_sensor_identifiers.insert(topic);
-  }
-
   auto file_resolver = ::cartographer::common::make_unique<
       ::cartographer::common::ConfigurationFileResolver>(
-      GetParamOrDie<std::vector<string>>("configuration_files_directories"));
-  const string code = file_resolver->GetFileContentOrDie(
-      GetParamOrDie<string>("mapping_configuration_basename"));
-
+      std::vector<string>{FLAGS_configuration_directory});
+  const string code =
+      file_resolver->GetFileContentOrDie(FLAGS_configuration_basename);
   ::cartographer::common::LuaParameterDictionary lua_parameter_dictionary(
       code, std::move(file_resolver), nullptr);
+
+  tracking_frame_ = lua_parameter_dictionary.GetString("tracking_frame");
+  odom_frame_ = lua_parameter_dictionary.GetString("odom_frame");
+  map_frame_ = lua_parameter_dictionary.GetString("map_frame");
+  provide_odom_ = lua_parameter_dictionary.GetBool("provide_odom");
+  laser_min_range_ = lua_parameter_dictionary.GetDouble("laser_min_range");
+  laser_max_range_ = lua_parameter_dictionary.GetDouble("laser_max_range");
+  laser_missing_echo_ray_length_ =
+      lua_parameter_dictionary.GetDouble("laser_missing_echo_ray_length");
+
+  // Set of all topics we subscribe to. We use the non-remapped default names
+  // which are unique.
+  std::unordered_set<string> expected_sensor_identifiers;
+
+  // Subscribe to exactly one laser.
+  const bool has_laser_scan_2d =
+      lua_parameter_dictionary.HasKey("use_laser_scan_2d") &&
+      lua_parameter_dictionary.GetBool("use_laser_scan_2d");
+  const bool has_multi_echo_laser_scan_2d =
+      lua_parameter_dictionary.HasKey("use_multi_echo_laser_scan_2d") &&
+      lua_parameter_dictionary.GetBool("use_multi_echo_laser_scan_2d");
+  const int num_lasers_3d =
+      lua_parameter_dictionary.HasKey("num_lasers_3d")
+          ? lua_parameter_dictionary.GetNonNegativeInt("num_lasers_3d")
+          : 0;
+
+  CHECK(has_laser_scan_2d + has_multi_echo_laser_scan_2d +
+            (num_lasers_3d > 0) ==
+        1)
+      << "Parameters 'use_laser_scan_2d', 'use_multi_echo_laser_scan_2d' and "
+         "'num_lasers_3d' are mutually exclusive, but one is required.";
+
+  if (has_laser_scan_2d) {
+    laser_subscriber_2d_ =
+        node_handle_.subscribe(kLaserScanTopic, kSubscriberQueueSize,
+                               &Node::LaserScanMessageCallback, this);
+    expected_sensor_identifiers.insert(kLaserScanTopic);
+  }
+  if (has_multi_echo_laser_scan_2d) {
+    laser_subscriber_2d_ =
+        node_handle_.subscribe(kMultiEchoLaserScanTopic, kSubscriberQueueSize,
+                               &Node::MultiEchoLaserScanMessageCallback, this);
+    expected_sensor_identifiers.insert(kMultiEchoLaserScanTopic);
+  }
+
+  bool expect_imu_data = true;
   if (has_laser_scan_2d || has_multi_echo_laser_scan_2d) {
     auto sparse_pose_graph_2d = ::cartographer::common::make_unique<
         ::cartographer::mapping_2d::SparsePoseGraph>(
         ::cartographer::mapping::CreateSparsePoseGraphOptions(
             lua_parameter_dictionary.GetDictionary("sparse_pose_graph").get()),
         &thread_pool_, &constant_node_data_);
+    auto options =
+        ::cartographer::mapping_2d::CreateLocalTrajectoryBuilderOptions(
+            lua_parameter_dictionary.GetDictionary("trajectory_builder").get());
+    expect_imu_data = options.expect_imu_data();
     trajectory_builder_ = ::cartographer::common::make_unique<
         ::cartographer::mapping_2d::GlobalTrajectoryBuilder>(
-        ::cartographer::mapping_2d::CreateLocalTrajectoryBuilderOptions(
-            lua_parameter_dictionary.GetDictionary("trajectory_builder").get()),
-        sparse_pose_graph_2d.get());
+        options, sparse_pose_graph_2d.get());
     sparse_pose_graph_ = std::move(sparse_pose_graph_2d);
   }
 
-  if (has_laser_scan_3d) {
-    const auto topics =
-        GetParamOrDie<std::vector<string>>("laser_scan_3d_topics");
-    for (const auto& topic : topics) {
-      laser_3d_subscribers_.push_back(node_handle_.subscribe(
+  if (num_lasers_3d > 0) {
+    for (int i = 0; i < num_lasers_3d; ++i) {
+      string topic = kPointCloud2Topic;
+      if (num_lasers_3d > 1) {
+        topic += "_" + std::to_string(i + 1);
+      }
+      laser_subscribers_3d_.push_back(node_handle_.subscribe(
           topic, kSubscriberQueueSize,
           boost::function<void(const sensor_msgs::PointCloud2::ConstPtr&)>(
               [this, topic](const sensor_msgs::PointCloud2::ConstPtr& msg) {
@@ -429,6 +437,13 @@ void Node::Initialize() {
     sparse_pose_graph_ = std::move(sparse_pose_graph_3d);
   }
   CHECK(sparse_pose_graph_ != nullptr);
+
+  // Maybe subscribe to the IMU.
+  if (expect_imu_data) {
+    imu_subscriber_ = node_handle_.subscribe(kImuTopic, kSubscriberQueueSize,
+                                             &Node::ImuMessageCallback, this);
+    expected_sensor_identifiers.insert(kImuTopic);
+  }
 
   // TODO(hrapp): Add odometry subscribers here.
 
@@ -470,7 +485,6 @@ bool Node::HandleSubmapQuery(
                          sparse_pose_graph_->GetTrajectoryNodes(),
                          submap_transforms[request.submap_id], &response_proto);
 
-  response.submap_id = response_proto.submap_id();
   response.submap_version = response_proto.submap_version();
   response.cells.insert(response.cells.begin(), response_proto.cells().begin(),
                         response_proto.cells().end());
@@ -528,7 +542,7 @@ void Node::PublishPose(const int64 timestamp) {
   const ::cartographer::mapping::Submaps* submaps =
       trajectory_builder_->submaps();
   const Rigid3d local_to_map =
-      sparse_pose_graph_->GetOdometryToMapTransform(*submaps);
+      sparse_pose_graph_->GetLocalToGlobalTransform(*submaps);
   const Rigid3d tracking_to_map = local_to_map * tracking_to_local;
 
   geometry_msgs::TransformStamped stamped_transform;
@@ -636,7 +650,7 @@ class ScopedRosLogSink : public google::LogSink {
 
   void WaitTillSent() override {
     if (will_die_) {
-      // Arbirarily give ROS some time to actually publish our message.
+      // Give ROS some time to actually publish our message.
       std::this_thread::sleep_for(
           ::cartographer::common::FromMilliseconds(1000));
     }
@@ -651,6 +665,12 @@ class ScopedRosLogSink : public google::LogSink {
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
+  google::ParseCommandLineFlags(&argc, &argv, true);
+
+  CHECK(!FLAGS_configuration_directory.empty())
+      << "-configuration_directory is missing.";
+  CHECK(!FLAGS_configuration_basename.empty())
+      << "-configuration_basename is missing.";
 
   ros::init(argc, argv, "cartographer_node");
   ros::start();

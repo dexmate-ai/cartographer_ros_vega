@@ -15,18 +15,13 @@
 -->
 
 <launch>
-  <param name="robot_description"
-    textfile="$(find cartographer_ros)/urdf/turtlebot.urdf" />
+  <param name="/use_sim_time" value="true" />
 
-  <node name="robot_state_publisher" pkg="robot_state_publisher"
-    type="robot_state_publisher" />
+  <include file="$(find cartographer_ros)/launch/backpack_3d.launch" />
 
-  <node name="cartographer" pkg="cartographer_ros"
-      type="cartographer_node" args="
-          -configuration_directory $(find cartographer_ros)/configuration_files
-          -configuration_basename turtlebot.lua"
-      output="screen" >
-    <remap from="scan" to="horizontal_laser_2d" />
-  </node>
+  <node name="rviz" pkg="rviz" type="rviz" required="true"
+      args="-d $(find cartographer_ros)/configuration_files/demo_3d.rviz" />
+  <node name="playbag" pkg="rosbag" type="play"
+      args="--clock $(arg bag_filename)" />
 
 </launch>
