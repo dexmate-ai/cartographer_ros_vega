@@ -14,37 +14,23 @@
  * limitations under the License.
  */
 
-#ifndef CARTOGRAPHER_ROS_ASSETS_WRITER_H_
-#define CARTOGRAPHER_ROS_ASSETS_WRITER_H_
-
 #include <string>
 #include <vector>
 
-#include "cartographer/mapping/trajectory_node.h"
-#include "cartographer_ros/node_options.h"
+#ifndef CARTOGRAPHER_ROS_ASSETS_WRITER_H_
+#define CARTOGRAPHER_ROS_ASSETS_WRITER_H_
 
 namespace cartographer_ros {
 
-// Returns 'true' if there is at least one untrimmed node for any trajectory.
-// The Write?DAssets functions expects this to be 'true'.
-bool HasNonTrimmedNode(
-    const std::vector<std::vector<::cartographer::mapping::TrajectoryNode>>&
-        all_trajectory_nodes);
-
-// Writes a trajectory proto and an occupancy grid.
-void Write2DAssets(
-    const std::vector<std::vector<::cartographer::mapping::TrajectoryNode>>&
-        all_trajectory_nodes,
-    const string& map_frame,
-    const ::cartographer::mapping_2d::proto::SubmapsOptions& submaps_options,
-    const std::string& stem);
-
-// Writes X-ray images, trajectory proto, and PLY files from the
-// 'all_trajectory_nodes'. The filenames will all start with 'stem'.
-void Write3DAssets(
-    const std::vector<std::vector<::cartographer::mapping::TrajectoryNode>>&
-        all_trajectory_nodes,
-    const double voxel_size, const std::string& stem);
+// Configures a point processing pipeline and pushes the points from the bag
+// through it.
+void RunAssetsWriterPipeline(const std::string& pose_graph_filename,
+                             const std::vector<std::string>& bag_filenames,
+                             const std::string& configuration_directory,
+                             const std::string& configuration_basename,
+                             const std::string& urdf_filename,
+                             const std::string& output_file_prefix,
+                             bool use_bag_transforms);
 
 }  // namespace cartographer_ros
 
