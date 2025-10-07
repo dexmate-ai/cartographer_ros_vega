@@ -25,6 +25,8 @@
 #include "cartographer/mapping/proto/map_builder_options.pb.h"
 #include "cartographer_ros/trajectory_options.h"
 
+#include <rclcpp/time.hpp>
+
 namespace cartographer_ros {
 
 // Top-level options of Cartographer's ROS integration.
@@ -35,7 +37,6 @@ struct NodeOptions {
   double submap_publish_period_sec;
   double pose_publish_period_sec;
   double trajectory_publish_period_sec;
-  bool use_pose_extrapolator = true;
 };
 
 NodeOptions CreateNodeOptions(
