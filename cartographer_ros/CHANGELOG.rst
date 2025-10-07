@@ -2,6 +2,11 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Handle multiple ROS messages with the same timestamp (`#46 <https://github.com/ros2/cartographer_ros/issues/46>`_)
+* Contributors: Michel Hidalgo
+
 1.0.9001 (2020-02-06)
 ---------------------
 * Init rclcpp first (`#41 <https://github.com/ros2/cartographer_ros/issues/41>`_)
