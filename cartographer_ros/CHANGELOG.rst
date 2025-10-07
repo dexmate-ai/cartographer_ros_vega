@@ -2,6 +2,12 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix for newer Google logging.
+* Fix warnings when building against recent ROS 2 releases.
+* Contributors: Chris Lalancette
+
 2.0.9001 (2023-04-13)
 ---------------------
 * fix cmake to prevent multiple definitions (`#63 <https://github.com/ros2/cartographer_ros/issues/63>`_)
