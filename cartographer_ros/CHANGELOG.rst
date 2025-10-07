@@ -2,6 +2,12 @@
 Changelog for package cartographer_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Switch to using a C-style string for RCLCPP macros.
+* Cleanup the CMakeLists.txt.
+* Contributors: Chris Lalancette
+
 1.0.9002 (2020-10-30)
 ---------------------
 * Handle multiple ROS messages with the same timestamp (`#46 <https://github.com/ros2/cartographer_ros/issues/46>`_)
