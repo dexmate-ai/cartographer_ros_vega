@@ -80,7 +80,7 @@ constexpr int kSubmapPublishPeriodInUts = 300 * 10000ll;  // 300 milliseconds
 constexpr int kPosePublishPeriodInUts = 5 * 10000ll;      // 5 milliseconds
 constexpr double kMaxTransformDelaySeconds = 1.;
 
-Rigid3d ToRidig3d(const geometry_msgs::TransformStamped& transform) {
+Rigid3d ToRigid3d(const geometry_msgs::TransformStamped& transform) {
   return Rigid3d(Eigen::Vector3d(transform.transform.translation.x,
                                  transform.transform.translation.y,
                                  transform.transform.translation.z),
@@ -186,7 +186,9 @@ class Node {
   ros::Subscriber laser_2d_subscriber_;
   std::vector<ros::Subscriber> laser_3d_subscribers_;
   string tracking_frame_;
+  string odom_frame_;
   string map_frame_;
+  bool provide_odom_;
   double laser_min_range_m_;
   double laser_max_range_m_;
   double laser_missing_echo_ray_length_m_;
@@ -218,7 +220,7 @@ Node::Node()
 
 Rigid3d Node::LookupToTrackingTransformOrThrow(
     const ::cartographer::common::Time time, const string& frame_id) {
-  return ToRidig3d(
+  return ToRigid3d(
       tf_buffer_.lookupTransform(tracking_frame_, frame_id, ToRos(time),
                                  ros::Duration(kMaxTransformDelaySeconds)));
 }
@@ -249,7 +251,7 @@ void Node::AddImu(const int64 timestamp, const string& frame_id,
                   ::cartographer::transform::ToEigen(imu.linear_acceleration()),
         sensor_to_tracking.rotation() *
             ::cartographer::transform::ToEigen(imu.angular_velocity()));
-  } catch (tf2::TransformException& ex) {
+  } catch (const tf2::TransformException& ex) {
     LOG(WARNING) << "Cannot transform " << frame_id << " -> " << tracking_frame_
                  << ": " << ex.what();
   }
@@ -282,7 +284,7 @@ void Node::AddHorizontalLaserFan(const int64 timestamp, const string& frame_id,
         ::cartographer::sensor::ToLaserFan3D(laser_fan),
         sensor_to_tracking.cast<float>());
     trajectory_builder_->AddHorizontalLaserFan(time, laser_fan_3d);
-  } catch (tf2::TransformException& ex) {
+  } catch (const tf2::TransformException& ex) {
     LOG(WARNING) << "Cannot transform " << frame_id << " -> " << tracking_frame_
                  << ": " << ex.what();
   }
@@ -322,7 +324,7 @@ void Node::AddLaserFan3D(const int64 timestamp, const string& frame_id,
         time, ::cartographer::sensor::TransformLaserFan3D(
                   ::cartographer::sensor::FromProto(laser_fan_3d),
                   sensor_to_tracking.cast<float>()));
-  } catch (tf2::TransformException& ex) {
+  } catch (const tf2::TransformException& ex) {
     LOG(WARNING) << "Cannot transform " << frame_id << " -> " << tracking_frame_
                  << ": " << ex.what();
   }
@@ -339,7 +341,9 @@ const T Node::GetParamOrDie(const string& name) {
 
 void Node::Initialize() {
   tracking_frame_ = GetParamOrDie<string>("tracking_frame");
+  odom_frame_ = GetParamOrDie<string>("odom_frame");
   map_frame_ = GetParamOrDie<string>("map_frame");
+  provide_odom_ = GetParamOrDie<bool>("provide_odom");
   laser_min_range_m_ = GetParamOrDie<double>("laser_min_range_m");
   laser_max_range_m_ = GetParamOrDie<double>("laser_max_range_m");
   laser_missing_echo_ray_length_m_ =
@@ -492,7 +496,7 @@ bool Node::HandleSubmapQuery(
   return true;
 }
 
-void Node::PublishSubmapList(int64 timestamp) {
+void Node::PublishSubmapList(const int64 timestamp) {
   ::cartographer::common::MutexLocker lock(&mutex_);
   const ::cartographer::mapping::Submaps* submaps =
       trajectory_builder_->submaps();
@@ -509,30 +513,50 @@ void Node::PublishSubmapList(int64 timestamp) {
   }
 
   ::cartographer_ros_msgs::SubmapList ros_submap_list;
+  ros_submap_list.header.stamp =
+      ToRos(::cartographer::common::FromUniversal(timestamp));
+  ros_submap_list.header.frame_id = map_frame_;
   ros_submap_list.trajectory.push_back(ros_trajectory);
   submap_list_publisher_.publish(ros_submap_list);
   last_submap_list_publish_timestamp_ = timestamp;
 }
 
-void Node::PublishPose(int64 timestamp) {
-  ::cartographer::common::MutexLocker lock(&mutex_);
-  const ::cartographer::mapping::Submaps* submaps =
-      trajectory_builder_->submaps();
-  const ::cartographer::transform::Rigid3d odometry_to_map =
-      sparse_pose_graph_->GetOdometryToMapTransform(*submaps);
-  const auto& pose_estimate = trajectory_builder_->pose_estimate();
-
-  const ::cartographer::transform::Rigid3d pose =
-      odometry_to_map * pose_estimate.pose;
+void Node::PublishPose(const int64 timestamp) {
   const ::cartographer::common::Time time =
       ::cartographer::common::FromUniversal(timestamp);
+  const Rigid3d tracking_to_local = trajectory_builder_->pose_estimate().pose;
+  const ::cartographer::mapping::Submaps* submaps =
+      trajectory_builder_->submaps();
+  const Rigid3d local_to_map =
+      sparse_pose_graph_->GetOdometryToMapTransform(*submaps);
+  const Rigid3d tracking_to_map = local_to_map * tracking_to_local;
 
   geometry_msgs::TransformStamped stamped_transform;
   stamped_transform.header.stamp = ToRos(time);
   stamped_transform.header.frame_id = map_frame_;
-  stamped_transform.child_frame_id = tracking_frame_;
-  stamped_transform.transform = ToGeometryMsgTransform(pose);
-  tf_broadcaster_.sendTransform(stamped_transform);
+  stamped_transform.child_frame_id = odom_frame_;
+
+  if (provide_odom_) {
+    ::cartographer::common::MutexLocker lock(&mutex_);
+    stamped_transform.transform = ToGeometryMsgTransform(local_to_map);
+    tf_broadcaster_.sendTransform(stamped_transform);
+
+    stamped_transform.header.frame_id = odom_frame_;
+    stamped_transform.child_frame_id = tracking_frame_;
+    stamped_transform.transform = ToGeometryMsgTransform(tracking_to_local);
+    tf_broadcaster_.sendTransform(stamped_transform);
+  } else {
+    try {
+      const Rigid3d tracking_to_odom =
+          LookupToTrackingTransformOrThrow(time, odom_frame_).inverse();
+      const Rigid3d odom_to_map = tracking_to_map * tracking_to_odom.inverse();
+      stamped_transform.transform = ToGeometryMsgTransform(odom_to_map);
+      tf_broadcaster_.sendTransform(stamped_transform);
+    } catch (const tf2::TransformException& ex) {
+      LOG(WARNING) << "Cannot transform " << tracking_frame_ << " -> "
+                   << odom_frame_ << ": " << ex.what();
+    }
+  }
   last_pose_publish_timestamp_ = timestamp;
 }
 

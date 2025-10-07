@@ -16,7 +16,7 @@
 
 <launch>
   <param name="robot_description"
-    textfile="$(find cartographer_ros)/urdf/turtlebot.urdf" />
+    textfile="$(find cartographer_ros)/urdf/backpack_3d.urdf" />
 
   <node name="robot_state_publisher" pkg="robot_state_publisher"
     type="robot_state_publisher" />
@@ -27,13 +27,13 @@
       map_frame: "map"
       odom_frame: "odom"
       tracking_frame: "base_link"
-      provide_odom: false
+      provide_odom: true
       configuration_files_directories: [
         "$(find cartographer_ros)/configuration_files"
       ]
-      mapping_configuration_basename: "turtlebot.lua"
+      mapping_configuration_basename: "backpack_3d.lua"
       imu_topic: "/imu"
-      laser_scan_2d_topic: "/horizontal_2d_laser"
+      laser_scan_3d_topics: ["/horizontal_3d_laser", "/vertical_3d_laser"]
       laser_min_range_m: 0.
       laser_max_range_m: 30.
       laser_missing_echo_ray_length_m: 5.
