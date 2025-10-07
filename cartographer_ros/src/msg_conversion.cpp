@@ -93,7 +93,7 @@ sensor_msgs::msg::PointCloud2 PreparePointCloud2Message(const int64_t timestamp,
   msg.header.frame_id = frame_id;
   msg.height = 1;
   msg.width = num_points;
-  msg.fields.resize(3);
+  msg.fields.resize(4);
   msg.fields[0].name = "x";
   msg.fields[0].offset = 0;
   msg.fields[0].datatype = sensor_msgs::msg::PointField::FLOAT32;
@@ -106,6 +106,10 @@ sensor_msgs::msg::PointCloud2 PreparePointCloud2Message(const int64_t timestamp,
   msg.fields[2].offset = 8;
   msg.fields[2].datatype = sensor_msgs::msg::PointField::FLOAT32;
   msg.fields[2].count = 1;
+  msg.fields[3].name = "intensity";
+  msg.fields[3].offset = 12;
+  msg.fields[3].datatype = sensor_msgs::msg::PointField::FLOAT32;
+  msg.fields[3].count = 1;
   msg.is_bigendian = false;
   msg.point_step = 16;
   msg.row_step = 16 * msg.width;
@@ -196,7 +200,8 @@ sensor_msgs::msg::PointCloud2 ToPointCloud2Message(
     data[offset++] = point.position.x();
     data[offset++] = point.position.y();
     data[offset++] = point.position.z();
-    data[offset++] = kPointCloudComponentFourMagic;
+    data[offset++] = kPointCloudComponentFourMagic; // dummy intensity
+    // data[offset++] = 1.0;
   }
   return msg;
 }

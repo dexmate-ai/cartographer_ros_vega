@@ -65,7 +65,7 @@ include(FindPkgConfig)
 pkg_search_module(CAIRO REQUIRED cairo>=1.12.16)
 
 # Library
-add_library(${PROJECT_NAME} SHARED
+add_library(${PROJECT_NAME} STATIC # using SHARED will cause issues with the 'collect_metrics' redefinition
   src/assets_writer.cpp
   src/map_builder_bridge.cpp
   src/msg_conversion.cpp
@@ -272,7 +272,7 @@ install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
 )
 
-install(DIRECTORY configuration_files urdf launch
+install(DIRECTORY configuration_files urdf launch prior_maps
   DESTINATION share/${PROJECT_NAME}/
 )
 
